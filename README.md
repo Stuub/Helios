@@ -24,6 +24,7 @@
 - External script analysis
 - Crawling targets and depth control
 - Custom payload support
+- Accurate detection
 
 ## Usage
 

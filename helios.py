@@ -1,11 +1,14 @@
 import argparse
 import requests
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
-import urllib.parse
+import urllib.parse, urllib.request
 import uuid
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -22,6 +25,7 @@ import random
 import string
 import warnings
 import textwrap
+import hashlib
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
@@ -110,16 +114,15 @@ class XSSScanner:
         self.payload_file = payload_file
         self.lock = threading.Lock()  
         self.terminal_width = shutil.get_terminal_size().columns
-        self.driver = self.setup_driver()
-        self.payloads = self.load_payloads()
         self.payload_identifiers = {}
+        self.payloads = self.load_payloads()
+        self.driver = self.setup_driver()
         self.skip_header_scan = False
         self.crawl = False
         self.crawl_depth = 2
         self.scanned_urls = set()
         self.discovered_urls = set()
 
-    
     def cleanup(self):
         if hasattr(self, 'driver') and self.driver:
             self.driver.quit()
@@ -130,12 +133,17 @@ class XSSScanner:
             options = FirefoxOptions()
             if self.headless:
                 options.add_argument("--headless")
-            driver = webdriver.Firefox(options=options)
+            service = FirefoxService(GeckoDriverManager().install())
+            driver = webdriver.Firefox(service=service, options=options)
         elif self.browser_type == 'chrome':
             options = ChromeOptions()
             if self.headless:
                 options.add_argument("--headless")
+            service = ChromeDriverManager().install()
             driver = webdriver.Chrome(options=options)
+        else:
+            self.print_and_save(f"[!] Unsupported browser type: {self.browser_type}", important=True)
+            self.cleanup()
 
         driver.get(self.target_url)
         for name, value in self.session.cookies.items():
@@ -143,19 +151,33 @@ class XSSScanner:
 
         return driver
 
+
     def load_payloads(self):
         if self.payload_file:
             try:
                 with open(self.payload_file, 'r') as f:
                     payloads = [line.strip() for line in f if line.strip()]
                 self.print_and_save(f"[*] Loaded {len(payloads)} payloads from {self.payload_file}")
+                self.extract_payload_identifiers(payloads)
                 return payloads
             except Exception as e:
-                self.print_and_save(f"[!] Error loading payload file: {e}", important=True)
+                self.print_and_save(f"[!] Error loading payload file: {str(e)}", important=True)
                 return self.generate_default_payloads()
         else:
             return self.generate_default_payloads()
-        
+    
+    def extract_payload_identifiers(self, payloads):
+        for payload in payloads:
+            # Extract potential identifiers (e.g., alert content, function names, unique strings)
+            alert_content = re.search(r"alert\(['\"](.+?)['\"]", payload)
+            if alert_content:
+                self.payload_identifiers[alert_content.group(1)] = payload
+            else:
+                # If no alert content, use a hash of the payload as identifier
+                identifier = hashlib.md5(payload.encode()).hexdigest()[:8]
+                self.payload_identifiers[identifier] = payload
+        self.print_and_save(f"[*] Extracted {len(self.payload_identifiers)} unique payload identifiers")
+
     def get_payloads(self, injection_type='default'):
         payloads = {
             'default': [
@@ -188,10 +210,14 @@ class XSSScanner:
         ]
 
     def customize_payload(self, payload):
-        unique_id = uuid.uuid4().hex[:8]
-        customized_payload = payload.replace("alert(", f"alert('{unique_id}'+")
-        self.payload_identifiers[unique_id] = payload
-        return customized_payload
+        for identifier, original_payload in self.payload_identifiers.items():
+            if payload == original_payload:
+                unique_id = uuid.uuid4().hex[:8]
+                if 'alert(' in payload:
+                    return payload.replace('alert(', f'alert("{unique_id}"+')
+                else:
+                    return f"{payload}_{unique_id}"
+        return payload
 
     def print_and_save(self, message, important=False):
         with self.lock:
@@ -211,22 +237,6 @@ class XSSScanner:
                 clean_message = self.remove_ansi_codes(message)
                 with open(self.output_file, 'a') as f:
                     f.write(clean_message + '\n')
-
-    # def print_and_save(self, message, important=False):
-    #     with self.lock:
-    #         # Color the parameter names
-    #         message = self.color_parameters(message)
-            
-    #         if important:
-    #             self.print_important(message)
-    #         else:
-    #             self.print_status(message)
-            
-    #         if self.output_file:
-    #             # Remove ANSI color codes for file output, looks cool with cat but not kate
-    #             clean_message = self.remove_ansi_codes(message)
-    #             with open(self.output_file, 'a') as f:
-    #                 f.write(clean_message + '\n')
 
     def color_parameters(self, message):
         # Color parameter names
@@ -364,47 +374,46 @@ class XSSScanner:
     def test_payload(self, payload, url, method, headers=None, data=None):
         original_payload = payload
         payload = self.customize_payload(payload)
+        self.print_and_save(f"[*] Testing payload: {original_payload}", important=True)
+        self.print_and_save(f"[*] Customized payload: {payload}", important=True)
+        
         try:
             if method == "GET":
+                self.print_and_save(f"[*] Sending GET request to: {url.replace(original_payload, payload)}")
                 self.driver.get(url.replace(original_payload, payload))
             elif method == "POST":
+                self.print_and_save(f"[*] Sending POST request to: {url}")
                 self.driver.get(url)
                 for name, value in data.items():
                     try:
                         element = self.driver.find_element(By.NAME, name)
                         element.clear()
-                        element.send_keys(value.replace(original_payload, payload) if value == original_payload else value)
-                    except:
-                        if self.verbose:
-                            self.print_and_save(f"[!] Could not find input field: {name}", important=True)
+                        new_value = value.replace(original_payload, payload) if value == original_payload else value
+                        element.send_keys(new_value)
+                        self.print_and_save(f"[*] Filled form field '{name}' with value: {new_value}")
+                    except Exception as e:
+                        self.print_and_save(f"[!] Could not find or fill input field: {name}.", important=True)
                 
                 try:
                     submit_button = self.driver.find_element(By.XPATH, "//input[@type='submit']")
+                    self.print_and_save("[*] Found submit button, clicking...")
                     submit_button.click()
                 except:
-                    if self.verbose:
-                        self.print_and_save("[!] Could not find submit button, pressing Enter on last input field", important=True)
+                    self.print_and_save("[!] Could not find submit button, pressing Enter on last input field", important=True)
                     element.send_keys(Keys.ENTER)
 
-            try:
-                WebDriverWait(self.driver, 3).until(EC.alert_is_present())
-                alert = self.driver.switch_to.alert
-                alert_text = alert.text
-                alert.accept()
-                for unique_id, orig_payload in self.payload_identifiers.items():
-                    if unique_id in alert_text:
-                        self.print_and_save(f"[+] XSS vulnerability confirmed: {bcolors.WARNING}{orig_payload}{bcolors.ENDC}", important=True)
-                        return True
-            except TimeoutException:
-                pass
-
-            if payload in self.driver.page_source:
-                if self.verbose:
-                    self.print_and_save(f"[*] Payload reflected but not executed: {bcolors.WARNING}{original_payload}{bcolors.ENDC}", important=True)
+            self.print_and_save("[*] Request sent, checking for exploitation...")
+            exploitation_result = self.check_exploitation(payload)
+            if exploitation_result:
+                self.print_and_save(f"[+] XSS vulnerability confirmed with payload: {bcolors.WARNING}{original_payload}{bcolors.ENDC}", important=True)
+                self.print_and_save(f"[+] Exploitation details: {exploitation_result}", important=True)
+                return True
+            else:
+                self.print_and_save(f"[-] No XSS vulnerability detected with payload: {original_payload}")
+                return False
 
         except Exception as e:
-            if self.verbose:
-                self.print_and_save(f"[!] Error testing payload: {e}", important=True)
+            self.print_and_save(f"[!] Error testing payload: {str(e)}", important=True)
         return False
 
     def test_dom_xss(self, content, is_external=False, script_url=None):
@@ -422,15 +431,6 @@ class XSSScanner:
             "crypto.generateCRMFRequest", "HTMLElement.innerHTML",
             "Document.write", "Document.writeln"
         ]
-
-        # Check specifically for eval
-        if re.search(r'eval\s*\(', content, re.IGNORECASE):
-            self.print_and_save(f"[+] Potential eval-based DOM XSS vulnerability found", important=True)
-            exploit_info = self.confirm_dom_xss("user input", "eval", is_external, script_url)
-            if exploit_info:
-                self.print_and_save(f"[+] eval-based DOM XSS vulnerability confirmed", important=True)
-                self.print_and_save(f"[*] Exploit Information:\n{exploit_info}", important=True)
-                return True
 
         for source in sources:
             for sink in sinks:
@@ -474,39 +474,6 @@ class XSSScanner:
         return False
 
     def confirm_dom_xss(self, source, sink, is_external=False, script_url=None):
-        context_payloads = {
-            "innerHTML": [
-                "<img src=x onerror=alert('XSS_TEST_PAYLOAD')>",
-                "<svg><script>alert('XSS_TEST_PAYLOAD')</script></svg>"
-                "<svg/onload=alert('XSS_TEST_PAYLOAD')>",
-                "<script>alert(XSS_TEST_PAYLOAD)</script>"
-            ],
-            "eval": [
-                "alert('XSS_TEST_PAYLOAD')",
-                "'-alert('XSS_TEST_PAYLOAD')-'",
-                "'-alert('XSS_TEST_PAYLOAD')//",
-                "alert('XSS_TEST_PAYLOAD')//",
-                "\"-alert('XSS_TEST_PAYLOAD')-\"",
-                "\";alert('XSS_TEST_PAYLOAD');//"
-            ],
-            "document.write": [
-                "<script>alert('XSS_TEST_PAYLOAD')</script>",
-                "<img src=x onerror=alert('XSS_TEST_PAYLOAD')>"
-                "<script>alert(XSS_TEST_PAYLOAD)</script>",
-                "javascript:alert('XSS_TEST_PAYLOAD')"
-            ],
-            "default": [
-                "<script>alert('XSS_TEST_PAYLOAD')</script>",
-                "javascript:alert('XSS_TEST_PAYLOAD')",
-                "<img src=x onerror=alert('XSS_TEST_PAYLOAD')>",
-                "<svg/onload=alert('XSS_TEST_PAYLOAD')>",
-                "<script>alert(XSS_TEST_PAYLOAD)</script>"
-
-            ]
-        }
-
-        payloads = context_payloads.get(sink.lower(), context_payloads["default"])
-    
         # Parse the original URL
         parsed_url = urllib.parse.urlparse(self.target_url)
         query = parsed_url.query
@@ -519,7 +486,7 @@ class XSSScanner:
             existing_params = urllib.parse.parse_qs(query)
             original_param = None
         
-        for payload in payloads:
+        for payload in self.payloads:
             encoded_payload = urllib.parse.quote(payload)
             
             # If there was an original parameter without a key, test it first
@@ -527,7 +494,7 @@ class XSSScanner:
                 test_query = f"{original_param}{encoded_payload}"
                 test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
                 
-                self.print_and_save(f"[*] Testing URL: {test_url}", important=True)
+                self.print_and_save(f"[*] Testing DOM XSS URL: {test_url}", important=True)
                 
                 if self.test_single_payload(test_url, payload):
                     return self.generate_exploit_info(source, sink, payload, test_url, is_external, script_url)
@@ -541,7 +508,7 @@ class XSSScanner:
                     test_query = f"{original_param}&{test_query}"
                 test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
                 
-                self.print_and_save(f"[*] Testing URL: {test_url}", important=True)
+                self.print_and_save(f"[*] Testing DOM XSS URL: {test_url}", important=True)
                 
                 if self.test_single_payload(test_url, payload):
                     return self.generate_exploit_info(source, sink, payload, test_url, is_external, script_url)
@@ -556,21 +523,17 @@ class XSSScanner:
                     test_query = f"{original_param}&{test_query}"
                 test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
                 
-                self.print_and_save(f"[*] Testing URL with new parameter '{new_param}': {test_url}", important=True)
+                self.print_and_save(f"[*] Testing DOM XSS URL with new parameter '{new_param}': {test_url}", important=True)
                 
                 if self.test_single_payload(test_url, payload):
                     return self.generate_exploit_info(source, sink, payload, test_url, is_external, script_url)
 
         return None
     
-    def generate_random_param(self, length=8):
-        """Generate a random parameter name."""
-        return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
-    
     def test_single_payload(self, test_url, payload):
         self.driver.get(test_url)
         return self.check_exploitation(payload)
-    
+
     def check_exploitation(self, payload):
         # Check for alert
         try:
@@ -578,30 +541,28 @@ class XSSScanner:
             alert = self.driver.switch_to.alert
             alert_text = alert.text
             alert.accept()
-            if "XSS_TEST_PAYLOAD" in alert_text:
-                self.print_and_save(f"[+] XSS Confirmed: Alert triggered with payload {payload}" , important=True)
-                return True
+            self.print_and_save(f"[+] Alert detected with text: {alert_text}")
+            for identifier in self.payload_identifiers.keys():
+                if identifier in alert_text:
+                    return f"Alert triggered with content: {alert_text}"
+            self.print_and_save("[-] Alert detected but doesn't match any payload identifier")
         except TimeoutException:
-            pass
+            self.print_and_save("[-] No alert detected")
 
         # Check for DOM modifications
-        try:
-            WebDriverWait(self.driver, 3).until(
-                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'XSS_TEST_PAYLOAD')]"))
-            )
-            self.print_and_save(f"[+] XSS Confirmed: Payload found in DOM", important=True)
-            return True
-        except TimeoutException:
-            pass
-
-        # Check if the payload is in the page source (might be reflected but not executed)
         page_source = self.driver.page_source
-        if "XSS_TEST_PAYLOAD" in page_source:
-            self.print_and_save(f"[*] Payload reflected in page source: {payload}", important=True)
-            # unconfirmed xss, just reflection
-            return False
-
-        return False
+        for identifier, original_payload in self.payload_identifiers.items():
+            if identifier in page_source:
+                self.print_and_save(f"[+] Payload identifier found in page source: {identifier}")
+                if re.search(r"<script>.*?</script>", original_payload, re.DOTALL):
+                    return "Script injection successful"
+                elif "<img" in original_payload or "<svg" in original_payload:
+                    return "Image/SVG injection successful"
+                else:
+                    return "Payload reflected in page source"
+        
+        self.print_and_save("[-] No payload identifiers found in page source")
+        return None
 
     def generate_exploit_info(self, source, sink, payload, test_url, is_external=False, script_url=None, executed=True):
         exploit_info = f"{bcolors.BOLD}{bcolors.OKGREEN}Vulnerable Source: {source}{bcolors.ENDC}\n"

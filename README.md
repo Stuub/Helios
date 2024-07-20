@@ -45,6 +45,9 @@ python3 helios.py target.com -o output.txt --crawl
 python3 helios.py -l targetlist.txt --payload-file xsspayloads.txt -o output.txt --crawl --headless --cookies "Name=abcdefg" --headers "X-Forwarded For: 127.0.0.1"
 ```
 
+Use `python helios.py --help` for a full list of options and usage instructions.
+
+
 ## POST Method XSS
 
 ![image](https://github.com/user-attachments/assets/29b60c24-f832-43b6-b023-18981b462f38)
@@ -53,8 +56,12 @@ python3 helios.py -l targetlist.txt --payload-file xsspayloads.txt -o output.txt
 
 ![image](https://github.com/user-attachments/assets/f49efbf6-3a3c-483e-b7b5-dce426a63b41)
 
+## Accurate Payload Detection
 
-Use `python helios.py --help` for a full list of options and usage instructions.
+![image](https://github.com/user-attachments/assets/96f7d2bf-cdf9-46cd-8b72-c0fa6fcebcc6)
+
+
+
 
 ## Future Development
 

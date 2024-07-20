@@ -35,6 +35,16 @@ pip install -r requirements.txt
 python3 helios.py [target_url] [options] 
 ```
 
+## Example
+
+```
+python3 helios.py target.com -o output.txt --crawl
+```
+
+```
+python3 helios.py -l targetlist.txt --payload-file xsspayloads.txt -o output.txt --crawl --headless --cookies "Name=abcdefg" --headers "X-Forwarded For: 127.0.0.1"
+```
+
 ## POST Method XSS
 
 ![image](https://github.com/user-attachments/assets/29b60c24-f832-43b6-b023-18981b462f38)

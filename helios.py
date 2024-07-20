@@ -198,16 +198,35 @@ class XSSScanner:
             # Color the parameter names
             message = self.color_parameters(message)
             
-            if important:
-                self.print_important(message)
-            else:
-                self.print_status(message)
+            # Split the message into lines and print each separately
+            lines = message.split('\n')
+            for line in lines:
+                if important:
+                    self.print_important(line)
+                else:
+                    self.print_status(line)
             
             if self.output_file:
-                # Remove ANSI color codes for file output, looks cool with cat but not kate
+                # Remove ANSI color codes for file output
                 clean_message = self.remove_ansi_codes(message)
                 with open(self.output_file, 'a') as f:
                     f.write(clean_message + '\n')
+
+    # def print_and_save(self, message, important=False):
+    #     with self.lock:
+    #         # Color the parameter names
+    #         message = self.color_parameters(message)
+            
+    #         if important:
+    #             self.print_important(message)
+    #         else:
+    #             self.print_status(message)
+            
+    #         if self.output_file:
+    #             # Remove ANSI color codes for file output, looks cool with cat but not kate
+    #             clean_message = self.remove_ansi_codes(message)
+    #             with open(self.output_file, 'a') as f:
+    #                 f.write(clean_message + '\n')
 
     def color_parameters(self, message):
         # Color parameter names
@@ -406,7 +425,7 @@ class XSSScanner:
 
         # Check specifically for eval
         if re.search(r'eval\s*\(', content, re.IGNORECASE):
-            self.print_and_save(f"[!] Potential eval-based DOM XSS vulnerability found", important=True)
+            self.print_and_save(f"[+] Potential eval-based DOM XSS vulnerability found", important=True)
             exploit_info = self.confirm_dom_xss("user input", "eval", is_external, script_url)
             if exploit_info:
                 self.print_and_save(f"[+] eval-based DOM XSS vulnerability confirmed", important=True)
@@ -418,13 +437,13 @@ class XSSScanner:
                 pattern = re.compile(r'{}.*?{}'.format(re.escape(source), re.escape(sink)), re.IGNORECASE | re.DOTALL)
                 if pattern.search(content):
                     location = "an external script" if is_external else "an inline script"
-                    self.print_and_save(f"[!] Potential DOM XSS found in {location}: {source} flowing into {sink}", important=True)
+                    self.print_and_save(f"[+] Potential DOM XSS found in {location}: {bcolors.OKGREEN}{source} flowing into {sink}", important=True)
                     if is_external:
-                        self.print_and_save(f"   Script URL: {script_url}")
+                        self.print_and_save(f"Script URL: {script_url}")
                     
                     exploit_info = self.confirm_dom_xss(source, sink, is_external, script_url)
                     if exploit_info:
-                        self.print_and_save(f"[+] DOM XSS vulnerability confirmed: {source} into {sink}", important=True)
+                        self.print_and_save(f"[+] DOM XSS vulnerability confirmed: {bcolors.OKGREEN}{source} {bcolors.ENDC}into {bcolors.OKGREEN}{sink}{bcolors.ENDC}", important=True)
                         self.print_and_save(f"[*] Exploit Information:\n{exploit_info}", important=True)
                         return True
 
@@ -442,9 +461,9 @@ class XSSScanner:
         for pattern, func_name in vulnerable_patterns:
             if re.search(pattern, content, re.IGNORECASE):
                 location = "an external script" if is_external else "an inline script"
-                self.print_and_save(f"[!] Potential DOM XSS vulnerability found in {location}: {func_name}", important=True)
+                self.print_and_save(f"[+] Potential DOM XSS vulnerability found in {location}: {bcolors.OKGREEN}{func_name}{bcolors.ENDC}", important=True)
                 if is_external:
-                    self.print_and_save(f"   Script URL: {script_url}")
+                    self.print_and_save(f"Script URL: {script_url}")
                 
                 exploit_info = self.confirm_dom_xss(func_name, func_name, is_external, script_url)
                 if exploit_info:
@@ -585,18 +604,18 @@ class XSSScanner:
         return False
 
     def generate_exploit_info(self, source, sink, payload, test_url, is_external=False, script_url=None, executed=True):
-        exploit_info = f"Vulnerable Source: {source}\n"
-        exploit_info += f"Vulnerable Sink: {sink}\n"
-        exploit_info += f"Test Payload: {payload}\n"
-        exploit_info += f"Test URL: {test_url}\n"
+        exploit_info = f"{bcolors.BOLD}{bcolors.OKGREEN}Vulnerable Source: {source}{bcolors.ENDC}\n"
+        exploit_info += f"{bcolors.BOLD}{bcolors.OKGREEN}Vulnerable Sink: {sink}{bcolors.ENDC}\n"
+        exploit_info += f"{bcolors.BOLD}{bcolors.OKGREEN}Test Payload: {payload}{bcolors.ENDC}\n"
+        exploit_info += f"{bcolors.BOLD}{bcolors.OKGREEN}Test URL: {test_url}{bcolors.ENDC}\n"
         
         if is_external:
-            exploit_info += f"Vulnerable Script: {script_url}\n"
+            exploit_info += f"{bcolors.WARNING}Vulnerable External Script: {script_url}\n"
         
         if executed:
-            exploit_info += "Status: Payload was successfully executed\n"
+            exploit_info += f"[+] Status: Payload was successfully executed\n"
         else:
-            exploit_info += "Status: Payload was reflected but not executed\n"
+            exploit_info += f"[!] Status: Payload was reflected but not executed\n"
 
         return exploit_info
     
@@ -663,7 +682,7 @@ class XSSScanner:
             self.print_and_save(f"[!] Error crawling {url}: {str(e)}", important=True)
 
 def main():
-    parser = argparse.ArgumentParser(description="XSS Scanner")
+    parser = argparse.ArgumentParser(description="Helios - Automated XSS Scanner")
     parser.add_argument("target", nargs='?', help="Target URL to scan")
     parser.add_argument("-l", "--target-list", help="File containing list of target URLs")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")

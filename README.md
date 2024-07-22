@@ -1,6 +1,7 @@
 # Helios: Automated XSS Auditing
 
-![image](https://github.com/user-attachments/assets/9f6f608d-9c00-49c2-9bad-455df258f74e)
+![image](https://github.com/user-attachments/assets/35347b21-1419-4d75-9edd-ca2efadfcca3)
+
 
 
 ## Features

@@ -8,23 +8,28 @@
 - **Comprehensive Scanning**: Tests URL parameters, POST parameters, headers, and DOM content for XSS vulnerabilities.
 - **Multiple Browser Support**: Compatible with both Firefox and Chrome for testing.
 - **Headless Mode**: Option to run scans in headless browser mode for faster & traditional execution.
-- **Concurrent Scanning**: Utilises multi-threading for efficient scanning of multiple targets.
+- **Paralellised Scanning**: Utilises multi-threading for efficient scanning of multiple targets.
 - **Customizable**: Supports custom headers, cookies, and payload files.
 - **Crawling Capability**: Can crawl websites to discover and test additional pages.
 - **Detailed Reporting**: Provides comprehensive output with color-coded console logs and optional file output.
 - **DOM XSS Detection**: Advanced detection of DOM-based XSS vulnerabilities.
 - **Payload Customization**: Automatically customises payloads with unique identifiers for accurate detection.
+- **Tamper Techniques**: WAF evasion techniques
+- **Detection of SQLi**: Validates whether SQLi is also indicative within responses
+
 
 ## Key Capabilities
 
-- URL parameter testing
-- POST parameter analysis
-- Header scanning
-- DOM content examination
+- URL parameter analysis & testing
+- POST parameter analysis & testing
+- DOM content analysis & testing
+- Header testing
 - External script analysis
 - Crawling targets and depth control
 - Custom payload support
 - Accurate detection
+- Parallelised tasks
+
 
 ## Usage
 
@@ -61,14 +66,19 @@ Use `python helios.py --help` for a full list of options and usage instructions.
 
 ![image](https://github.com/user-attachments/assets/96f7d2bf-cdf9-46cd-8b72-c0fa6fcebcc6)
 
+## SQLI Detection
 
+![image](https://github.com/user-attachments/assets/cca33815-5e24-45bc-aea4-9a1cf6eae9d3)
+
+## Scan Summaries
+
+![image](https://github.com/user-attachments/assets/19ff0dde-08a9-4662-a487-9b0cfca7be4f)
 
 
 ## Future Development
 
 - Getting gud
 - Enhance payload generation dependant on context of target
-- Optimize performance for large-scale scans, current still kinda sucks at speed - but any faster seems to produce false negatives :( 
 
 ## Note
 

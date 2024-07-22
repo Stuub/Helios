@@ -80,6 +80,7 @@ Use `python helios.py --help` for a full list of options and usage instructions.
 
 - Enhance payload generation dependant on context of target
 - Modular refactoring
+- More 'smart' payloads for DOM XSS
 - Getting gud
 
 

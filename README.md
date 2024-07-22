@@ -78,8 +78,10 @@ Use `python helios.py --help` for a full list of options and usage instructions.
 
 ## Future Development
 
-- Getting gud
 - Enhance payload generation dependant on context of target
+- Modular refactoring
+- Getting gud
+
 
 ## Note
 

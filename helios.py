@@ -70,7 +70,7 @@ def banner():
          ∞∞∞π    π∞     ∞  ∞∞∞∞∞∞∞∞ππ∞∞∞∞∞∞∞∞∞∞πππ∞∞∞∞∞∞∞∞∞∞  ∞  π     ∞∞∞∞         
         π∞∞∞      π     ∞∞∞∞     ∞∞π∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞   ∞∞∞∞∞∞    ππ      ∞∞∞         
         ∞∞∞∞     π∞ ∞  ∞∞∞∞∞πππ∞∞∞π∞∞  {bcolors.BOLD}{bcolors.HEADER}HELIOS{bcolors.ENDC}{bcolors.FAIL}  ∞∞ ∞∞∞ππ∞∞∞π∞∞  π  ∞     ∞∞∞∞{bcolors.ENDC}        
- {bcolors.BOLD}∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞ππ   ∞∞∞∞ ∞ππ∞∞{bcolors.BOLD}{bcolors.WARNING}v0.1{bcolors.ENDC}{bcolors.BOLD}ππππ∞π∞∞∞∞   ∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞  
+ {bcolors.BOLD}∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞ππ   ∞∞∞∞ ∞ππ∞∞{bcolors.BOLD}{bcolors.WARNING}v0.3{bcolors.ENDC}{bcolors.BOLD}ππππ∞π∞∞∞∞   ∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞∞  
         ∞∞∞      ∞π    ∞∞∞∞πππππ∞∞ ∞∞∞∞∞∞∞∞π∞∞∞∞∞ ∞ππ∞∞∞∞∞∞∞∞   π ∞     π∞∞∞        
         ∞∞∞∞     ∞     π∞∞∞π∞∞∞∞∞∞  ππ∞∞∞∞π∞π∞π∞ ∞π∞∞∞∞∞∞∞∞∞∞     ∞     π∞∞∞        
         ∞∞∞∞     π     ∞∞∞∞∞   ∞∞∞∞∞ π∞∞∞∞∞ ∞∞π  ∞∞∞∞   ∞∞∞∞π π   ∞     ∞∞∞∞        
@@ -662,18 +662,6 @@ class XSSScanner:
                     self.print_and_save(f"{bcolors.BOLD}Test Payload: {bcolors.OKGREEN}{payload}{bcolors.ENDC}", important=True)
                     self.print_and_save(f"{bcolors.BOLD}Test URL: {bcolors.OKGREEN}{url}{bcolors.ENDC}", important=True)
                     self.print_and_save(f"{bcolors.BOLD}Test Parameter: {bcolors.OKGREEN}{param}{bcolors.ENDC}", important=True)
-
-    # def test_post_params(self, url, params):
-    #     for param in params:
-    #         for payload in self.payloads:
-    #             self.print_and_save(f"[*] Testing POST parameter: {param} with payload: {bcolors.WARNING}{payload}{bcolors.ENDC}")
-    #             test_params = params.copy()
-    #             test_params[param] = payload
-    #             if self.test_payload(payload, url, "POST", data=test_params):
-    #                 self.print_and_save(f"[+] XSS vulnerability confirmed in {bcolors.BOLD}POST{bcolors.ENDC} parameter: {param}", important=True)
-    #                 self.print_and_save(f"{bcolors.BOLD}Test Payload: {bcolors.OKGREEN}{payload}{bcolors.ENDC}", important=True)
-    #                 self.print_and_save(f"{bcolors.BOLD}Test URL: {bcolors.OKGREEN}{url}{bcolors.ENDC}", important=True),
-    #                 self.print_and_save(f"{bcolors.BOLD}Test Parameter: {bcolors.OKGREEN}{param}{bcolors.ENDC}", important=True)
     
     def generate_default_value(self, field_type):
         if field_type == 'email':
@@ -1355,7 +1343,6 @@ class XSSScanner:
 
         return result
 
-    
     async def submit_form(self):
         try:
             submit_button = await self.find_and_interact_with_element(
@@ -1430,24 +1417,6 @@ class XSSScanner:
             # self.print_and_save(f"[!] Error scanning URL {url}: {str(e)}", important=True)
             return results  # Return whatever results we have, even if there was an error
 
-    # def scan_single_url(self, url):
-    #     self.target_url = url
-    #     self.print_and_save(f"[*] Testing URL parameters for: {url}")
-        
-    #     if self.detected_wafs:
-    #         self.print_and_save("[!] WAF detected. Some tests may be blocked or produce false negatives.", important=True)
-        
-    #     self.scan_url_parameters()
-
-    #     self.print_and_save(f"[*] Testing POST parameters for: {url}")
-    #     self.scan_post_parameters()
-
-    #     self.print_and_save(f"[*] Scanning DOM content for: {url}")
-    #     self.scan_dom_content()
-
-    #     if not self.skip_header_scan:
-    #         self.print_and_save(f"[*] Testing headers for: {url}")
-    #         self.scan_headers()
 
     async def crawl_website(self, url, depth):
         if depth == 0 or url in self.discovered_urls:

@@ -17,6 +17,7 @@
 - **Payload Customization**: Automatically customises payloads with unique identifiers for accurate detection.
 - **Tamper Techniques**: WAF evasion techniques
 - **Detection of SQLi**: Validates whether SQLi is also indicative within responses
+- **WAF Detection**: The ability to detect a firewall running on a target, using **behavioural** and **static checks**
 
 
 ## Key Capabilities
@@ -28,9 +29,7 @@
 - External script analysis
 - Crawling targets and depth control
 - WAF Detection
-- Custom payload support
-- Accurate detection
-- Parallelised tasks
+- Tamper Techniques
 
 
 ## Usage

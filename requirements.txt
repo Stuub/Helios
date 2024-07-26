@@ -1,4 +1,7 @@
-selenium==4.22.0
-requests==2.32.3
+aiohttp
 beautifulsoup4==4.12.3
+requests==2.32.3
+selenium==4.22.0
+uvloop
 webdriver-manager==4.0.1
+
